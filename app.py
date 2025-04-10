@@ -159,7 +159,8 @@ def social_feed():
 
             if row['comments']:
                 st.markdown("💬 Comments:")
-                for c in row['comments'].split("|"):
+                comments = str(row['comments']) if isinstance(row['comments'], str) else ""
+                for c in comments.split("|"):
                     if c.strip():
                         st.markdown(f"- {c.strip()}")
 
