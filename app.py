@@ -43,7 +43,7 @@ def login_user():
             st.session_state.logged_in = True
             st.session_state.username = username
             st.success(f"Logged in as {username}")
-            st.experimental_rerun()
+            st.rerun()
         else:
             st.error("Invalid username or password")
 
@@ -66,7 +66,7 @@ def new_post():
                                 columns=['username', 'timestamp', 'text', 'image_path', 'likes', 'comments'])
         new_data.to_csv(POSTS_CSV, mode='a', header=False, index=False)
         st.success("Posted!")
-        st.experimental_rerun()
+        st.rerun()
 
 # ---------- Social Feed ----------
 def social_feed():
@@ -123,7 +123,7 @@ def social_feed():
                     updated_comment = f"{st.session_state.username}: {new_comment}"
                     df.at[index, 'comments'] = comments_raw + f"|{updated_comment}" if comments_raw else updated_comment
                     df.to_csv(POSTS_CSV, index=False)
-                    st.experimental_rerun()
+                    st.rerun()
 
         except Exception as e:
             st.error(f"Post error: {e}")
@@ -179,7 +179,7 @@ def main():
         elif menu == "Logout":
             st.session_state.logged_in = False
             st.session_state.username = ""
-            st.experimental_rerun()
+            st.rerun()
 
     else:
         auth_action = st.sidebar.radio("Account", ["Login", "Register"])
