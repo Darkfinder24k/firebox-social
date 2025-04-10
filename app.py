@@ -71,40 +71,62 @@ def new_post():
 # ---------- Social Feed ----------
 def social_feed():
     st.subheader("🔥 Firebox Social")
-    df = pd.read_csv(POSTS_CSV)
+
+    # Load CSV with correct columns
+    try:
+        df = pd.read_csv(POSTS_CSV)
+        expected_cols = ['username', 'timestamp', 'text', 'image_path', 'likes', 'comments']
+        for col in expected_cols:
+            if col not in df.columns:
+                df[col] = "" if col in ['text', 'image_path', 'comments'] else 0
+    except Exception as e:
+        st.error(f"Failed to load posts: {e}")
+        return
 
     if 'liked_posts' not in st.session_state:
         st.session_state.liked_posts = set()
 
     for index, row in df[::-1].iterrows():
-        st.markdown(f"**{row['username']}** at {row['timestamp']}")
-        st.markdown(row['text'])
+        try:
+            username = row['username']
+            timestamp = row['timestamp']
+            post_text = row.get('text', '')
+            image_path = row.get('image_path', '')
+            likes = int(row.get('likes', 0))
+            comments_raw = row.get('comments', '')
 
-        if pd.notna(row['image_path']) and os.path.exists(row['image_path']):
-            st.image(row['image_path'], width=400)
+            st.markdown(f"**{username}** at {timestamp}")
+            st.markdown(post_text if pd.notna(post_text) else "")
 
-        post_key = f"{row['username']}_{row['timestamp']}"
-        if post_key not in st.session_state.liked_posts:
-            if st.button("👍 Like", key=f"like_{index}"):
-                df.loc[index, 'likes'] = int(df.loc[index, 'likes']) + 1
-                st.session_state.liked_posts.add(post_key)
-                df.to_csv(POSTS_CSV, index=False)
-                st.experimental_rerun()
-        else:
-            st.markdown("✅ You already liked this post.")
+            if pd.notna(image_path) and os.path.exists(image_path):
+                st.image(image_path, width=400)
 
-        st.markdown(f"Likes: {row['likes']}")
+            post_key = f"{username}_{timestamp}"
+            if post_key not in st.session_state.liked_posts:
+                if st.button("👍 Like", key=f"like_{index}"):
+                    df.loc[index, 'likes'] = likes + 1
+                    st.session_state.liked_posts.add(post_key)
+                    df.to_csv(POSTS_CSV, index=False)
+                    st.experimental_rerun()
+            else:
+                st.markdown("✅ You already liked this post.")
 
-        with st.expander("💬 Comments"):
-            comments = row['comments'].split("|") if pd.notna(row['comments']) and row['comments'] else []
-            for c in comments:
-                if c:
-                    st.markdown(f"- {c}")
-            new_comment = st.text_input("Add a comment", key=f"comment_{index}")
-            if st.button("Comment", key=f"comment_btn_{index}"):
-                df.at[index, 'comments'] = row['comments'] + f"|{st.session_state.username}: {new_comment}" if row['comments'] else f"{st.session_state.username}: {new_comment}"
-                df.to_csv(POSTS_CSV, index=False)
-                st.experimental_rerun()
+            st.markdown(f"Likes: {df.loc[index, 'likes']}")
+
+            with st.expander("💬 Comments"):
+                comments = comments_raw.split("|") if pd.notna(comments_raw) and comments_raw else []
+                for c in comments:
+                    if c:
+                        st.markdown(f"- {c}")
+                new_comment = st.text_input("Add a comment", key=f"comment_{index}")
+                if st.button("Comment", key=f"comment_btn_{index}"):
+                    updated_comment = f"{st.session_state.username}: {new_comment}"
+                    df.at[index, 'comments'] = comments_raw + f"|{updated_comment}" if comments_raw else updated_comment
+                    df.to_csv(POSTS_CSV, index=False)
+                    st.experimental_rerun()
+
+        except Exception as e:
+            st.error(f"Post error: {e}")
 
 # ---------- Firebox AI ----------
 def firebox_ai():
