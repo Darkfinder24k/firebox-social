@@ -102,24 +102,29 @@ def social_feed():
             post_key = f"{username}_{timestamp}"
             if post_key not in st.session_state.liked_posts:
                 if st.button("👍 Like", key=f"like_{index}"):
-                    df.loc[index, 'likes'] = likes + 1
+                    df.at[index, 'likes'] = likes + 1
                     st.session_state.liked_posts.add(post_key)
                     df.to_csv(POSTS_CSV, index=False)
-                    st.experimental_rerun()
+                    st.rerun()
             else:
                 st.markdown("✅ You already liked this post.")
+            st.markdown(f"Likes: {int(df.at[index, 'likes'])}")
 
-            st.markdown(f"Likes: {df.loc[index, 'likes']}")
-
+            # Comments section
             with st.expander("💬 Comments"):
-                comments = comments_raw.split("|") if pd.notna(comments_raw) and comments_raw else []
+                if pd.isna(comments_raw):
+                    comments_raw = ""
+                comments = comments_raw.split("|") if comments_raw else []
+
                 for c in comments:
                     if c:
                         st.markdown(f"- {c}")
+
                 new_comment = st.text_input("Add a comment", key=f"comment_{index}")
                 if st.button("Comment", key=f"comment_btn_{index}"):
                     updated_comment = f"{st.session_state.username}: {new_comment}"
-                    df.at[index, 'comments'] = comments_raw + f"|{updated_comment}" if comments_raw else updated_comment
+                    combined_comments = comments_raw + f"|{updated_comment}" if comments_raw else updated_comment
+                    df.at[index, 'comments'] = combined_comments
                     df.to_csv(POSTS_CSV, index=False)
                     st.rerun()
 
@@ -133,28 +138,28 @@ def firebox_ai():
     if st.button("Ask"):
         st.write("Thinking...")
 
-        # LLaMA API
+        # LLaMA
         try:
             llama_resp = requests.post("https://api.llmapi.com/", json={"prompt": prompt, "temperature": 0.7})
-            llama_text = llama_resp.json().get("text", "No response.")
-        except Exception as e:
-            llama_text = f"LLaMA failed: {e}"
+            llama_text = llama_resp.json().get("text", "")
+        except:
+            llama_text = "LLaMA failed."
 
-        # Gemini API
+        # Gemini
         try:
             gemini_api_key = "AIzaSyAbXv94hwzhbrxhBYq-zS58LkhKZQ6cjMg"
             gemini_resp = requests.post(
                 f"https://generativelanguage.googleapis.com/v1beta2/models/text-bison-001:generateText?key={gemini_api_key}",
                 json={"prompt": {"text": prompt}}
             )
-            gemini_text = gemini_resp.json().get("candidates", [{}])[0].get("output", "No Gemini response.")
-        except Exception as e:
-            gemini_text = f"Gemini failed: {e}"
+            gemini_text = gemini_resp.json()['candidates'][0]['output']
+        except:
+            gemini_text = "Gemini failed."
 
         # Combine responses
         st.markdown("**Firebox Response:**")
-        st.markdown(f"**LLaMA:** {llama_text}")
-        st.markdown(f"**Gemini:** {gemini_text}")
+        st.write(f"**LLaMA:** {llama_text}")
+        st.write(f"**Gemini:** {gemini_text}")
 
 # ---------- Main ----------
 def main():
