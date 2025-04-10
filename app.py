@@ -1,78 +1,86 @@
-# firebox_social_ai_app.py
 import streamlit as st
 import pandas as pd
+import requests
 import os
 from datetime import datetime
-from PIL import Image
-import base64
-import requests
 
-# === API KEYS ===
+# === Secret API Keys ===
 GEMINI_API_KEY = "AIzaSyAbXv94hwzhbrxhBYq-zS58LkhKZQ6cjMg"
+LLAMA_URL = "https://api.llmapi.com/"
 
-# === FILE PATHS ===
+# === Files for persistence ===
 USER_FILE = "users.csv"
 POST_FILE = "posts.csv"
-IMAGE_DIR = "post_images"
+IMG_DIR = "uploaded_images"
 
-# === INIT ===
-os.makedirs(IMAGE_DIR, exist_ok=True)
+# === Setup ===
+os.makedirs(IMG_DIR, exist_ok=True)
 if not os.path.exists(USER_FILE):
     pd.DataFrame(columns=["email", "username", "password"]).to_csv(USER_FILE, index=False)
 if not os.path.exists(POST_FILE):
-    pd.DataFrame(columns=["username", "content", "timestamp", "likes", "comments", "image"]).to_csv(POST_FILE, index=False)
+    pd.DataFrame(columns=["username", "content", "timestamp", "likes", "comments", "image_path"]).to_csv(POST_FILE, index=False)
 
-# === DARK MODE ===
-st.markdown("""
-    <style>
-        body { background-color: #0e1117; color: white; }
-        .css-1v0mbdj, .stTextInput > div > div, .stTextArea, .stButton, .stMarkdown, .stFileUploader { color: white !important; }
-    </style>
-""", unsafe_allow_html=True)
-
-# === SESSION ===
 if 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.username = ""
-if 'show_ai' not in st.session_state:
-    st.session_state.show_ai = False
 
-# === Gemini API (internalized) ===
+# === Internal Gemini Call ===
 def _ask_gemini(prompt):
     url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent"
     headers = {"Content-Type": "application/json"}
     data = {"contents": [{"parts": [{"text": prompt}]}]}
     response = requests.post(f"{url}?key={GEMINI_API_KEY}", headers=headers, json=data)
-    if response.status_code == 200:
-        return response.json()['candidates'][0]['content']['parts'][0]['text']
-    else:
-        return "Error generating response."
+    return response.json()['candidates'][0]['content']['parts'][0]['text'] if response.status_code == 200 else ""
 
-# === Auth Pages ===
+# === Internal LLaMA Call ===
+def _ask_llama(prompt):
+    headers = {"Content-Type": "application/json"}
+    data = {
+        "prompt": prompt,
+        "max_tokens": 300,
+        "temperature": 0.7
+    }
+    response = requests.post(LLAMA_URL, headers=headers, json=data)
+    return response.json().get("response", "").strip()
+
+# === Merge AI Responses ===
+def merge_as_firebox(response1, response2):
+    prompt = f"""
+You are Firebox, a smart assistant. You got two draft answers.
+
+A: {response1}
+B: {response2}
+
+Merge them into one, clearly and helpfully. Do not mention any tools used. Just respond as Firebox.
+"""
+    return _ask_gemini(prompt)
+
+# === Register ===
 def register():
-    st.subheader("Register")
+    st.subheader("🧑 Register")
     email = st.text_input("Email")
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
     if st.button("Sign Up"):
         df = pd.read_csv(USER_FILE)
-        if email in df['email'].values:
+        if email in df.email.values:
             st.warning("Email already registered.")
-        elif username in df['username'].values:
+        elif username in df.username.values:
             st.warning("Username taken.")
         else:
             new_user = pd.DataFrame([[email, username, password]], columns=df.columns)
             df = pd.concat([df, new_user], ignore_index=True)
             df.to_csv(USER_FILE, index=False)
-            st.success("Registration successful 🎉")
+            st.success("🎉 Registered!")
 
+# === Login ===
 def login():
-    st.subheader("Login")
-    email = st.text_input("Email", key="login_email")
-    password = st.text_input("Password", type="password", key="login_pass")
+    st.subheader("🔐 Login")
+    email = st.text_input("Email")
+    password = st.text_input("Password", type="password")
     if st.button("Log In"):
         df = pd.read_csv(USER_FILE)
-        user = df[(df['email'] == email) & (df['password'] == password)]
+        user = df[(df.email == email) & (df.password == password)]
         if not user.empty:
             st.session_state.logged_in = True
             st.session_state.username = user.iloc[0]["username"]
@@ -80,99 +88,109 @@ def login():
         else:
             st.error("Invalid credentials.")
 
-# === Firebox Icon Trigger ===
-def floating_firebox():
-    st.markdown("""
-    <style>
-    .firebox-btn {
-        position: fixed;
-        top: 20px;
-        right: 20px;
-        background-color: #ff5722;
-        color: white;
-        border: none;
-        padding: 10px 16px;
-        border-radius: 50%;
-        font-size: 20px;
-        cursor: pointer;
-        z-index: 9999;
-    }
-    </style>
-    <button class="firebox-btn" onclick="window.location.href='#firebox'">🔥</button>
-    """, unsafe_allow_html=True)
+# === Firebox Chat ===
+def firebox_chat():
+    st.subheader("🤖 Ask Firebox AI")
+    user_prompt = st.text_input("Ask something...")
+    if st.button("Answer"):
+        with st.spinner("Firebox is thinking..."):
+            g = _ask_gemini(user_prompt)
+            l = _ask_llama(user_prompt)
+            answer = merge_as_firebox(g, l)
+            st.success(answer)
 
 # === Social Feed ===
 def social_feed():
     st.title("🔥 Firebox Social")
     st.write(f"Logged in as **{st.session_state.username}**")
-    st.markdown("---")
 
-    post_text = st.text_area("What's on your mind?")
-    image_file = st.file_uploader("Upload image", type=["png", "jpg", "jpeg"])
+    st.subheader("📢 New Post")
+    text = st.text_area("What's on your mind?")
+    image = st.file_uploader("Upload image", type=["jpg", "jpeg", "png"])
 
     if st.button("Post"):
-        post_data = pd.read_csv(POST_FILE)
-        img_path = ""
-        if image_file:
-            img_name = f"{datetime.now().timestamp()}_{image_file.name}"
-            img_path = os.path.join(IMAGE_DIR, img_name)
-            with open(img_path, "wb") as f:
-                f.write(image_file.getbuffer())
+        if text.strip() != "":
+            image_path = ""
+            if image:
+                image_path = os.path.join(IMG_DIR, f"{datetime.now().timestamp()}_{image.name}")
+                with open(image_path, "wb") as f:
+                    f.write(image.getbuffer())
 
-        new_post = {
-            "username": st.session_state.username,
-            "content": post_text,
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
-            "likes": 0,
-            "comments": "",
-            "image": img_path
-        }
-        post_data = pd.concat([post_data, pd.DataFrame([new_post])], ignore_index=True)
-        post_data.to_csv(POST_FILE, index=False)
-        st.success("Posted!")
+            posts = pd.read_csv(POST_FILE)
+            new_post = {
+                "username": st.session_state.username,
+                "content": text,
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "likes": 0,
+                "comments": "",
+                "image_path": image_path
+            }
+            posts = pd.concat([posts, pd.DataFrame([new_post])], ignore_index=True)
+            posts.to_csv(POST_FILE, index=False)
+            st.success("Posted!")
+            st.experimental_rerun()
 
     st.markdown("---")
+    posts = pd.read_csv(POST_FILE)
+    if posts.empty:
+        st.info("No posts yet.")
+    else:
+        posts = posts.sort_values(by="timestamp", ascending=False)
+        for idx, row in posts.iterrows():
+            st.markdown(f"**{row['username']}** @ {row['timestamp']}")
+            st.markdown(row['content'])
+            if row['image_path'] and os.path.exists(row['image_path']):
+                st.image(row['image_path'], use_column_width=True)
+            st.markdown(f"❤️ {row['likes']} likes")
 
-    post_data = pd.read_csv(POST_FILE)
-    post_data = post_data.sort_values(by="timestamp", ascending=False)
+            if st.button(f"Like {idx}"):
+                posts.at[idx, 'likes'] += 1
+                posts.to_csv(POST_FILE, index=False)
+                st.experimental_rerun()
 
-    for idx, row in post_data.iterrows():
-        st.markdown(f"**{row['username']}** posted at {row['timestamp']}")
-        st.markdown(f"{row['content']}")
-        if pd.notna(row['image']) and os.path.exists(row['image']):
-            st.image(row['image'], width=400)
-        st.markdown(f"❤️ {row['likes']} likes")
+            comment = st.text_input(f"Comment {idx}", key=f"comment_{idx}")
+            if st.button(f"Comment {idx}"):
+                if comment.strip():
+                    row_comments = posts.at[idx, 'comments']
+                    updated = f"{row_comments} [{st.session_state.username}]: {comment} |"
+                    posts.at[idx, 'comments'] = updated
+                    posts.to_csv(POST_FILE, index=False)
+                    st.experimental_rerun()
 
-        comment = st.text_input(f"Comment on post {idx}", key=f"comment_{idx}")
-        if st.button(f"Add Comment {idx}"):
-            if comment.strip():
-                post_data = pd.read_csv(POST_FILE)
-                current_comments = post_data.at[idx, 'comments']
-                new_comments = f"{current_comments} [{st.session_state.username}]: {comment} |"
-                post_data.at[idx, 'comments'] = new_comments
-                post_data.to_csv(POST_FILE, index=False)
+            if row['comments']:
+                st.markdown("💬 Comments:")
+                for c in row['comments'].split("|"):
+                    if c.strip():
+                        st.markdown(f"- {c.strip()}")
 
-        if row['comments']:
-            st.markdown("*Comments:*")
-            for comment_text in str(row['comments']).split("|"):
-                if comment_text.strip():
-                    st.markdown(f"- {comment_text.strip()}")
+            st.markdown("---")
 
-        st.markdown("---")
+# === Floating Firebox Icon ===
+def firebox_icon():
+    st.markdown("""
+    <style>
+        .floating-btn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: #ff4b4b;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            font-size: 28px;
+            color: white;
+            text-align: center;
+            line-height: 50px;
+            z-index: 9999;
+        }
+    </style>
+    <a href="#firebox" class="floating-btn">🔥</a>
+    """, unsafe_allow_html=True)
 
-# === Firebox Assistant ===
-def firebox_ai():
-    st.subheader("🤖 Ask Firebox AI")
-    prompt = st.text_area("Ask something...")
-    if st.button("Get Answer"):
-        with st.spinner("Firebox is thinking..."):
-            reply = _ask_gemini(prompt)
-            st.success(reply)
-
-# === Main ===
+# === Main App ===
 def main():
-    floating_firebox()
-    menu = st.sidebar.selectbox("Menu", ["Home", "Register", "Login", "Logout"])
+    firebox_icon()
+    menu = st.sidebar.radio("Menu", ["Home", "Register", "Login", "Logout"])
     if menu == "Register":
         register()
     elif menu == "Login":
@@ -186,9 +204,11 @@ def main():
         st.success("Logged out successfully.")
 
     if st.session_state.logged_in:
+        firebox_chat()
         social_feed()
-        st.markdown("<h3 id='firebox'></h3>", unsafe_allow_html=True)
-        firebox_ai()
+    else:
+        st.title("🔥 Welcome to Firebox")
+        st.info("Please register or login to continue.")
 
 if __name__ == "__main__":
     main()
