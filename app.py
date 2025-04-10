@@ -139,7 +139,7 @@ def social_feed():
         for idx, row in posts.iterrows():
             st.markdown(f"**{row['username']}** @ {row['timestamp']}")
             st.markdown(row['content'])
-            if row['image_path'] and os.path.exists(row['image_path']):
+            if isinstance(row['image_path'], str) and os.path.exists(row['image_path']):
                 st.image(row['image_path'], use_column_width=True)
             st.markdown(f"❤️ {row['likes']} likes")
 
