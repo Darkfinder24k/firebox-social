@@ -32,7 +32,6 @@ def register_user():
             new_user.to_csv(USERS_CSV, mode='a', header=False, index=False)
             st.success("Registered successfully. Please login.")
 
-
 def login_user():
     st.subheader("Login")
     username = st.text_input("Username")
@@ -72,7 +71,6 @@ def new_post():
 def social_feed():
     st.subheader("🔥 Firebox Social")
 
-    # Load CSV with correct columns
     try:
         df = pd.read_csv(POSTS_CSV)
         expected_cols = ['username', 'timestamp', 'text', 'image_path', 'likes', 'comments']
@@ -135,28 +133,28 @@ def firebox_ai():
     if st.button("Ask"):
         st.write("Thinking...")
 
-        # LLaMA
+        # LLaMA API
         try:
             llama_resp = requests.post("https://api.llmapi.com/", json={"prompt": prompt, "temperature": 0.7})
-            llama_text = llama_resp.json().get("text", "")
-        except:
-            llama_text = "LLaMA failed."
+            llama_text = llama_resp.json().get("text", "No response.")
+        except Exception as e:
+            llama_text = f"LLaMA failed: {e}"
 
-        # Gemini
+        # Gemini API
         try:
             gemini_api_key = "AIzaSyAbXv94hwzhbrxhBYq-zS58LkhKZQ6cjMg"
             gemini_resp = requests.post(
                 f"https://generativelanguage.googleapis.com/v1beta2/models/text-bison-001:generateText?key={gemini_api_key}",
                 json={"prompt": {"text": prompt}}
             )
-            gemini_text = gemini_resp.json()['candidates'][0]['output']
-        except:
-            gemini_text = "Gemini failed."
+            gemini_text = gemini_resp.json().get("candidates", [{}])[0].get("output", "No Gemini response.")
+        except Exception as e:
+            gemini_text = f"Gemini failed: {e}"
 
         # Combine responses
         st.markdown("**Firebox Response:**")
-        st.write(f"**LLaMA:** {llama_text}")
-        st.write(f"**Gemini:** {gemini_text}")
+        st.markdown(f"**LLaMA:** {llama_text}")
+        st.markdown(f"**Gemini:** {gemini_text}")
 
 # ---------- Main ----------
 def main():
