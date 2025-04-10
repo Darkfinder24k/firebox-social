@@ -1,27 +1,75 @@
 import streamlit as st
 import pandas as pd
 import os
+import requests
 from datetime import datetime
 
-# Paths to user and post data
+# === API KEYS ===
+GEMINI_API_KEY = "AIzaSyAbXv94hwzhbrxhBYq-zS58LkhKZQ6cjMg"  # 🔑 Replace with your key
+LLAMA_API_URL = "https://api.llmapi.com/"  # 🔗 No API key required in this version
+
+# === File Paths ===
 USER_FILE = "users.csv"
 POST_FILE = "posts.csv"
 
-# Create user & post files if not exist
+# === File Initialization ===
 if not os.path.exists(USER_FILE):
     pd.DataFrame(columns=["email", "username", "password"]).to_csv(USER_FILE, index=False)
 
 if not os.path.exists(POST_FILE):
     pd.DataFrame(columns=["username", "content", "timestamp", "likes", "comments"]).to_csv(POST_FILE, index=False)
 
-# Session state to track login
-if 'logged_in' not in st.session_state:
+# === Session State ===
+if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.username = ""
 
-# ---------------- Registration Page ---------------- #
+# === Firebox AI: Gemini ===
+def ask_firebox_gemini(prompt):
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={GEMINI_API_KEY}"
+    payload = {
+        "contents": [{
+            "parts": [{"text": prompt}]
+        }]
+    }
+    response = requests.post(url, json=payload)
+    try:
+        return response.json()['candidates'][0]['content']['parts'][0]['text']
+    except:
+        return "❗ Error from Firebox Gemini Engine."
+
+# === Firebox AI: LLaMA ===
+def ask_firebox_llama(prompt):
+    payload = {
+        "prompt": prompt,
+        "model": "llama2-13b-chat",
+        "temperature": 0.7,
+        "max_tokens": 300
+    }
+    response = requests.post(LLAMA_API_URL, json=payload)
+    try:
+        return response.json().get("response", "❗ No reply from Firebox LLaMA Engine.")
+    except:
+        return "❗ Error from Firebox LLaMA Engine."
+
+# === Firebox AI Chatbox ===
+def firebox_ai():
+    st.title("🔥 Firebox AI Assistant")
+    model = st.selectbox("Choose Firebox AI Engine", ["Gemini", "LLaMA"])
+    prompt = st.text_area("💬 Ask Firebox anything...")
+
+    if st.button("Get Answer"):
+        with st.spinner("Firebox is thinking..."):
+            if model == "Gemini":
+                answer = ask_firebox_gemini(prompt)
+            else:
+                answer = ask_firebox_llama(prompt)
+        st.markdown("### 🧠 Firebox says:")
+        st.success(answer)
+
+# === Register ===
 def register():
-    st.subheader("Register")
+    st.subheader("🔐 Create a Firebox Account")
     email = st.text_input("Email")
     username = st.text_input("Username")
     password = st.text_input("Password", type="password")
@@ -30,16 +78,16 @@ def register():
         if email in df['email'].values:
             st.warning("Email already registered.")
         elif username in df['username'].values:
-            st.warning("Username taken.")
+            st.warning("Username already taken.")
         else:
             new_user = pd.DataFrame([[email, username, password]], columns=df.columns)
             df = pd.concat([df, new_user], ignore_index=True)
             df.to_csv(USER_FILE, index=False)
-            st.success("Registration successful 🎉")
+            st.success("Registration successful! 🎉")
 
-# ---------------- Login Page ---------------- #
+# === Login ===
 def login():
-    st.subheader("Login")
+    st.subheader("🔓 Login to Firebox")
     email = st.text_input("Email", key="login_email")
     password = st.text_input("Password", type="password", key="login_pass")
     if st.button("Log In"):
@@ -52,68 +100,63 @@ def login():
         else:
             st.error("Invalid credentials.")
 
-# ---------------- Main Social Feed ---------------- #
+# === Social Feed ===
 def social_feed():
-    st.title("🔥 Firebox Social")
-    st.write(f"Logged in as **{st.session_state.username}**")
+    st.title("🔥 Firebox Social Feed")
+    st.write(f"👤 Logged in as: **{st.session_state.username}**")
 
-    # Post something
-    post_text = st.text_area("What's on your mind?")
+    post = st.text_area("📝 What's on your mind?")
     if st.button("Post"):
-        if post_text.strip():
+        if post.strip():
             post_data = pd.read_csv(POST_FILE)
             new_post = {
                 "username": st.session_state.username,
-                "content": post_text,
+                "content": post,
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
                 "likes": 0,
                 "comments": ""
             }
             post_data = pd.concat([post_data, pd.DataFrame([new_post])], ignore_index=True)
             post_data.to_csv(POST_FILE, index=False)
-            st.success("Posted!")
+            st.success("✅ Posted!")
 
     st.markdown("---")
-
-    # View all posts
     post_data = pd.read_csv(POST_FILE)
     if post_data.empty:
-        st.info("No posts yet. Be the first to post!")
+        st.info("No posts yet. Be the first!")
     else:
         post_data = post_data.sort_values(by="timestamp", ascending=False)
         for idx, row in post_data.iterrows():
-            st.markdown(f"**{row['username']}** posted at {row['timestamp']}")
+            st.markdown(f"**{row['username']}** at {row['timestamp']}")
             st.markdown(f"{row['content']}")
             st.markdown(f"❤️ {row['likes']} likes")
             
-            # Like button
             if st.button(f"Like {idx}"):
                 post_data.at[idx, 'likes'] += 1
                 post_data.to_csv(POST_FILE, index=False)
                 st.experimental_rerun()
 
-            # Comment
-            comment = st.text_input(f"Comment on post {idx}", key=f"comment_{idx}")
+            comment = st.text_input(f"💬 Comment on post {idx}", key=f"comment_{idx}")
             if st.button(f"Add Comment {idx}"):
                 if comment.strip():
                     current_comments = post_data.at[idx, 'comments']
-                    new_comments = f"{current_comments} [{st.session_state.username}]: {comment} |"
-                    post_data.at[idx, 'comments'] = new_comments
+                    updated = f"{current_comments} [{st.session_state.username}]: {comment} |"
+                    post_data.at[idx, 'comments'] = updated
                     post_data.to_csv(POST_FILE, index=False)
                     st.experimental_rerun()
 
-            # Show comments
             if row['comments']:
                 st.markdown("*Comments:*")
-                for comment_text in row['comments'].split("|"):
-                    if comment_text.strip():
-                        st.markdown(f"- {comment_text.strip()}")
+                for c in row['comments'].split("|"):
+                    if c.strip():
+                        st.markdown(f"- {c.strip()}")
             st.markdown("---")
 
-# ---------------- Main App Flow ---------------- #
+# === Main App ===
 def main():
-    st.title("🔥 Firebox — Social Media in Streamlit")
-    menu = st.sidebar.selectbox("Menu", ["Home", "Register", "Login", "Logout"])
+    st.set_page_config(page_title="🔥 Firebox", layout="centered")
+    st.sidebar.title("🚀 Firebox Menu")
+    menu = st.sidebar.selectbox("Navigate", ["Home", "Register", "Login", "Logout", "Firebox AI"])
 
     if menu == "Register":
         register()
@@ -125,9 +168,11 @@ def main():
     elif menu == "Logout":
         st.session_state.logged_in = False
         st.session_state.username = ""
-        st.success("Logged out successfully.")
+        st.success("Logged out.")
+    elif menu == "Firebox AI":
+        firebox_ai()
 
-    if st.session_state.logged_in:
+    if st.session_state.logged_in and menu == "Home":
         social_feed()
 
 if __name__ == "__main__":
