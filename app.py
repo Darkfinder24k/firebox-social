@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import os
 import time
-import requests
 from datetime import datetime
 
 # ---------- Quantora Social Configuration ----------
@@ -44,7 +43,7 @@ def quantora_user_info_header(username, show_follow=False):
 
     col1, col2 = st.columns([0.08, 0.92])
     with col1:
-        st.image(quantora_profile_pic_path, width=36, height=36, use_column_width=False, style="border-radius: 50%; object-fit: cover;")
+        st.image(quantora_profile_pic_path, width=36, use_column_width=False, style="border-radius: 50%; object-fit: cover;")
     with col2:
         st.markdown(f"<strong style='font-size: 1.1em;'>{username}</strong>", unsafe_allow_html=True)
         if show_follow and username != st.session_state.quantora_username:
@@ -208,14 +207,14 @@ def quantora_new_post():
         st.success("Your post has been shared with the Quantora community!")
         st.rerun()
 
-# ---------- Quantora Social Feed Display (News Feed Logic) ----------
+# ---------- Quantora Social Feed Display (See Everyone's Posts) ----------
 def quantora_social_feed():
     st.subheader("Your Quantora Feed")
     try:
         quantora_df = pd.read_csv(QUANTORA_POSTS_CSV)
-        follows = get_following(st.session_state.quantora_username)
-        followed_posts = quantora_df[quantora_df['quantora_username'].isin(follows + [st.session_state.quantora_username])].sort_values(by='quantora_timestamp', ascending=False)
-        for index, row in followed_posts.iterrows():
+        # Now displaying all posts, regardless of who the logged-in user follows
+        all_posts = quantora_df.sort_values(by='quantora_timestamp', ascending=False)
+        for index, row in all_posts.iterrows():
             st.markdown("<div style='margin-bottom: 20px; padding: 15px; border: 1px solid #e1e4e8; border-radius: 10px; background-color: #fff;'>", unsafe_allow_html=True)
             quantora_user_info_header(row['quantora_username'])
             st.markdown(f"<div style='margin-top: 10px; font-size: 1em; line-height: 1.4;'>{handle_hashtags(row.get('quantora_text', ''))}</div>", unsafe_allow_html=True)
@@ -236,14 +235,14 @@ def quantora_profile(view_username=None):
     try:
         user_profile = user_data[user_data['quantora_username'] == username_to_view].iloc[0]
         bio = user_profile.get('bio', 'No bio available.')
-        profile_pic =user_profile.get('quantora_profile_pic', DEFAULT_PROFILE_PIC)
+        profile_pic = user_profile.get('quantora_profile_pic', DEFAULT_PROFILE_PIC)
         followers = get_followers(username_to_view)
         following = get_following(username_to_view)
         posts = get_user_posts(username_to_view)
 
         col1, col2 = st.columns([0.2, 0.8])
         with col1:
-            st.image(profile_pic, width=80, height=80, use_column_width=False, style="border-radius: 50%; object-fit: cover;")
+            st.image(profile_pic, width=80, use_column_width=False, style="border-radius: 50%; object-fit: cover;")
         with col2:
             st.markdown(f"<strong style='font-size: 1.5em;'>{username_to_view}</strong>", unsafe_allow_html=True)
             st.markdown(f"<span style='color: #777;'>{len(posts)} posts | {len(followers)} followers | {len(following)} following</span>", unsafe_allow_html=True)
