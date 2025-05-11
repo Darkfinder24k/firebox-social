@@ -94,14 +94,14 @@ def quantora_comment_section(row, index):
                 commenter, comment_text = parts[0], parts[1]
                 colored_commenter = f'<span style="color: black;">{commenter}:</span>'
                 colored_comment_text = f'<span style="color: black;">{comment_text}</span>'
-                # Increased width of the comment display div
-                st.markdown(f"<div style='width: 100%; padding: 8px; margin-bottom: 5px; background-color: #f0f2f5; border-radius: 5px;'><strong>{colored_commenter}</strong> {colored_comment_text}</div>", unsafe_allow_html=True)
+                # Removed explicit width style - let it expand naturally
+                st.markdown(f"<div style='padding: 8px; margin-bottom: 5px; background-color: #f0f2f5; border-radius: 5px;'><strong>{colored_commenter}</strong> {colored_comment_text}</div>", unsafe_allow_html=True)
             else:
                 colored_c = f'<span style="color: black;">{c}</span>'
-                # Increased width for single-part comments as well
-                st.markdown(f"<div style='width: 100%; margin-bottom: 5px;'>- {colored_c}</div>", unsafe_allow_html=True)
+                # Removed explicit width style for single-part comments
+                st.markdown(f"<div style='margin-bottom: 5px;'>- {colored_c}</div>", unsafe_allow_html=True)
 
-    comment_input_col, comment_button_col = st.columns([0.8, 0.2])
+    comment_input_col, comment_button_col = st.columns([0.9, 0.1]) # Wider input field
     with comment_input_col:
         quantora_new_comment = st.text_input("", placeholder="Add a comment...", key=f"comment_input_{index}")
     with comment_button_col:
