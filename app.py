@@ -216,14 +216,14 @@ def quantora_social_feed():
     st.subheader("Your Quantora Feed")
     try:
         quantora_df = pd.read_csv(QUANTORA_POSTS_CSV)
-        # Now displaying all posts, regardless of who the logged-in user follows
         all_posts = quantora_df.sort_values(by='quantora_timestamp', ascending=False)
         for index, row in all_posts.iterrows():
             st.markdown("<div style='margin-bottom: 20px; padding: 15px; border: 1px solid #e1e4e8; border-radius: 10px; background-color: #fff;'>", unsafe_allow_html=True)
             quantora_user_info_header(row['quantora_username'])
             st.markdown(f"<div style='margin-top: 10px; font-size: 1em; line-height: 1.4;'>{handle_hashtags(row.get('quantora_text', ''))}</div>", unsafe_allow_html=True)
-            if row.get('quantora_image_path') and os.path.exists(row.get('quantora_image_path')):
-                st.image(row['quantora_image_path'], use_column_width=True, style="margin-top: 10px; border-radius: 8px;")
+            image_path = row.get('quantora_image_path')
+            if image_path and isinstance(image_path, str) and os.path.exists(image_path):
+                st.image(image_path, use_column_width=True, style="margin-top: 10px; border-radius: 8px;")
             st.markdown("<hr style='margin: 15px 0; border-top: 1px solid #ddd;'>", unsafe_allow_html=True)
             quantora_post_actions(row, index)
             st.markdown("</div>", unsafe_allow_html=True)
