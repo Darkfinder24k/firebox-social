@@ -220,7 +220,8 @@ def quantora_social_feed():
             st.markdown(f"<div style='margin-top: 10px; font-size: 1em; line-height: 1.4;'>{handle_hashtags(row.get('quantora_text', ''))}</div>", unsafe_allow_html=True)
             if row.get('quantora_image_path') and os.path.exists(row.get('quantora_image_path')):
                 st.image(row['quantora_image_path'], use_column_width=True, style="margin-top: 10px; border-radius: 8px;")
-            st.markdown("<hr style='margin: 15px 0; border-top: 1px solid #ddd;'>", unsafe_allow_html=True)quantora_post_actions(row, index)
+            st.markdown("<hr style='margin: 15px 0; border-top: 1px solid #ddd;'>", unsafe_allow_html=True)
+            quantora_post_actions(row, index)
             st.markdown("</div>", unsafe_allow_html=True)
     except Exception as e:
         st.error(f"Error loading feed: {e}")
