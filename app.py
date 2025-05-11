@@ -31,6 +31,10 @@ if not os.path.exists(QUANTORA_PROFILE_PICS_DIR):
     os.makedirs(QUANTORA_PROFILE_PICS_DIR)
 
 # --- Helper Functions ---
+def handle_hashtags(text):
+    # Basic implementation: returns the text as is
+    return text
+
 def quantora_user_info_header(username, show_follow=False):
     quantora_users_df = pd.read_csv(QUANTORA_USERS_CSV)
     try:
@@ -315,7 +319,7 @@ def quantora_main():
     if 'view_profile' not in st.session_state:
         st.session_state.view_profile = None
 
-    navigation = quantora_sidebar()
+    navigation = st.sidebar()
 
     if st.session_state.quantora_logged_in:
         if navigation == "Your Feed":
