@@ -263,8 +263,13 @@ def quantora_profile(view_username=None):
     try:
         user_data = pd.read_csv(QUANTORA_USERS_CSV)
         user_profile = user_data[user_data['quantora_username'] == username_to_view].iloc[0]
-        bio= user_profile.get('bio', 'No bio available.')
+        bio = user_profile.get('bio', 'No bio available.')
         profile_pic = user_profile.get('quantora_profile_pic', DEFAULT_PROFILE_PIC)
+
+        # Ensure profile_pic is a string
+        if not isinstance(profile_pic, str):
+            profile_pic = DEFAULT_PROFILE_PIC
+
         followers = get_followers(username_to_view)
         following = get_following(username_to_view)
         posts = get_user_posts(username_to_view)
