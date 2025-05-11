@@ -43,7 +43,7 @@ def quantora_user_info_header(username, show_follow=False):
 
     col1, col2 = st.columns([0.08, 0.92])
     with col1:
-        st.image(quantora_profile_pic_path, width=36, use_column_width=False, style="border-radius: 50%; object-fit: cover;")
+        st.markdown(f'<img src="{quantora_profile_pic_path}" width="36" style="border-radius: 50%; object-fit: cover;">', unsafe_allow_html=True)
     with col2:
         st.markdown(f"<strong style='font-size: 1.1em;'>{username}</strong>", unsafe_allow_html=True)
         if show_follow and username != st.session_state.quantora_username:
@@ -220,19 +220,18 @@ def quantora_social_feed():
             st.markdown(f"<div style='margin-top: 10px; font-size: 1em; line-height: 1.4;'>{handle_hashtags(row.get('quantora_text', ''))}</div>", unsafe_allow_html=True)
             if row.get('quantora_image_path') and os.path.exists(row.get('quantora_image_path')):
                 st.image(row['quantora_image_path'], use_column_width=True, style="margin-top: 10px; border-radius: 8px;")
-            st.markdown("<hr style='margin: 15px 0; border-top: 1px solid #ddd;'>", unsafe_allow_html=True)
-            quantora_post_actions(row, index)
+            st.markdown("<hr style='margin: 15px 0; border-top: 1px solid #ddd;'>", unsafe_allow_html=True)quantora_post_actions(row, index)
             st.markdown("</div>", unsafe_allow_html=True)
     except Exception as e:
         st.error(f"Error loading feed: {e}")
 
-# ---------- Quantora Social Profile Page (Enhanced) ----------
+# ---------- Quantora Social Profile Page (Enhanced & Error Handling) ----------
 def quantora_profile(view_username=None):
     username_to_view = view_username if view_username else st.session_state.quantora_username
     st.subheader(f"@{username_to_view}")
 
-    user_data = pd.read_csv(QUANTORA_USERS_CSV)
     try:
+        user_data = pd.read_csv(QUANTORA_USERS_CSV)
         user_profile = user_data[user_data['quantora_username'] == username_to_view].iloc[0]
         bio = user_profile.get('bio', 'No bio available.')
         profile_pic = user_profile.get('quantora_profile_pic', DEFAULT_PROFILE_PIC)
@@ -242,7 +241,7 @@ def quantora_profile(view_username=None):
 
         col1, col2 = st.columns([0.2, 0.8])
         with col1:
-            st.image(profile_pic, width=80, use_column_width=False, style="border-radius: 50%; object-fit: cover;")
+            st.markdown(f'<img src="{profile_pic}" width="80" style="border-radius: 50%; object-fit: cover;">', unsafe_allow_html=True)
         with col2:
             st.markdown(f"<strong style='font-size: 1.5em;'>{username_to_view}</strong>", unsafe_allow_html=True)
             st.markdown(f"<span style='color: #777;'>{len(posts)} posts | {len(followers)} followers | {len(following)} following</span>", unsafe_allow_html=True)
@@ -265,8 +264,13 @@ def quantora_profile(view_username=None):
                         st.info("No image") # Placeholder for text posts in grid
         else:
             st.info(f"@{username_to_view} hasn't posted yet.")
+
     except IndexError:
-        st.error("User not found.")
+        st.error(f"User @{username_to_view} not found.")
+    except FileNotFoundError:
+        st.error("User data file not found.")
+    except Exception as e:
+        st.error(f"An error occurred while loading the profile: {e}")
 
 # ---------- Quantora Social Search ----------
 def quantora_search():
