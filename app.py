@@ -95,7 +95,8 @@ def quantora_comment_section(row, index):
                 colored_commenter = f'<span style="color: black;">{commenter}:</span>'
                 colored_comment_text = f'<span style="color: black;">{comment_text}</span>'
                 # Removed explicit width style - let it expand naturally
-                st.markdown(f"<div style='padding: 8px; margin-bottom: 5px; background-color: #f0f2f5; border-radius: 5px;'><strong>{colored_commenter}</strong> {colored_comment_text}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='padding: 8px; margin-bottom: 5px; background-color: #f0f2f5; border-radius: 5px; width: 100%; max-width: 1000px;'><strong>{colored_commenter}</strong> {colored_comment_text}</div>", unsafe_allow_html=True)
+
             else:
                 colored_c = f'<span style="color: black;">{c}</span>'
                 # Removed explicit width style for single-part comments
