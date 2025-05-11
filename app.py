@@ -94,12 +94,12 @@ def quantora_comment_section(row, index):
                 commenter, comment_text = parts[0], parts[1]
                 colored_commenter = f'<span style="color: black;">{commenter}:</span>'
                 colored_comment_text = f'<span style="color: black;">{comment_text}</span>'
-                # Increase the width here (e.g., 90% of the container)
-                st.markdown(f"<div style='width: 90%; padding: 8px; margin-bottom: 5px; background-color: #f0f2f5; border-radius: 5px;'><strong>{colored_commenter}</strong> {colored_comment_text}</div>", unsafe_allow_html=True)
+                # Increased width of the comment display div
+                st.markdown(f"<div style='width: 100%; padding: 8px; margin-bottom: 5px; background-color: #f0f2f5; border-radius: 5px;'><strong>{colored_commenter}</strong> {colored_comment_text}</div>", unsafe_allow_html=True)
             else:
                 colored_c = f'<span style="color: black;">{c}</span>'
-                # Increase the width here as well
-                st.markdown(f"<div style='width: 90%; margin-bottom: 5px;'>- {colored_c}</div>", unsafe_allow_html=True)
+                # Increased width for single-part comments as well
+                st.markdown(f"<div style='width: 100%; margin-bottom: 5px;'>- {colored_c}</div>", unsafe_allow_html=True)
 
     comment_input_col, comment_button_col = st.columns([0.8, 0.2])
     with comment_input_col:
