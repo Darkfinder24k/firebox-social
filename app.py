@@ -5,191 +5,337 @@ import time
 import requests
 from datetime import datetime
 
-# ---------- File Setup ----------
-POSTS_CSV = "posts.csv"
-USERS_CSV = "users.csv"
+# ---------- Quantora Social Configuration ----------
+QUANTORA_POSTS_CSV = "quantora_social_posts.csv"
+QUANTORA_USERS_CSV = "quantora_social_users.csv"
+QUANTORA_FOLLOWS_CSV = "quantora_social_follows.csv"
+QUANTORA_IMAGES_DIR = "quantora_social_images"
+QUANTORA_PROFILE_PICS_DIR = "quantora_social_profile_pics"
+DEFAULT_PROFILE_PIC = "default_profile.png"
 
-if not os.path.exists(POSTS_CSV):
-    df = pd.DataFrame(columns=['username', 'timestamp', 'text', 'image_path', 'likes', 'comments'])
-    df.to_csv(POSTS_CSV, index=False)
+if not os.path.exists(QUANTORA_POSTS_CSV):
+    quantora_df_posts = pd.DataFrame(columns=['quantora_username', 'quantora_timestamp', 'quantora_text', 'quantora_image_path', 'quantora_likes', 'quantora_comments'])
+    quantora_df_posts.to_csv(QUANTORA_POSTS_CSV, index=False)
 
-if not os.path.exists(USERS_CSV):
-    users_df = pd.DataFrame(columns=['email', 'username', 'password'])
-    users_df.to_csv(USERS_CSV, index=False)
+if not os.path.exists(QUANTORA_USERS_CSV):
+    quantora_df_users = pd.DataFrame(columns=['quantora_email', 'quantora_username', 'quantora_password', 'quantora_profile_pic', 'bio'])
+    quantora_df_users.to_csv(QUANTORA_USERS_CSV, index=False)
 
-# ---------- User Auth ----------
-def register_user():
-    st.subheader("Register")
-    email = st.text_input("Email")
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
-    if st.button("Register"):
-        users_df = pd.read_csv(USERS_CSV)
-        if username in users_df['username'].values:
-            st.error("Username already exists")
+if not os.path.exists(QUANTORA_FOLLOWS_CSV):
+    quantora_df_follows = pd.DataFrame(columns=['follower', 'followed'])
+    quantora_df_follows.to_csv(QUANTORA_FOLLOWS_CSV, index=False)
+
+if not os.path.exists(QUANTORA_IMAGES_DIR):
+    os.makedirs(QUANTORA_IMAGES_DIR)
+
+if not os.path.exists(QUANTORA_PROFILE_PICS_DIR):
+    os.makedirs(QUANTORA_PROFILE_PICS_DIR)
+
+# --- Helper Functions ---
+def quantora_user_info_header(username, show_follow=False):
+    quantora_users_df = pd.read_csv(QUANTORA_USERS_CSV)
+    try:
+        quantora_user_data = quantora_users_df[quantora_users_df['quantora_username'] == username].iloc[0]
+        quantora_profile_pic_path = quantora_user_data.get('quantora_profile_pic', DEFAULT_PROFILE_PIC)
+        if not os.path.exists(quantora_profile_pic_path):
+            quantora_profile_pic_path = DEFAULT_PROFILE_PIC
+    except IndexError:
+        quantora_profile_pic_path = DEFAULT_PROFILE_PIC
+
+    col1, col2 = st.columns([0.08, 0.92])
+    with col1:
+        st.image(quantora_profile_pic_path, width=36, height=36, use_column_width=False, style="border-radius: 50%; object-fit: cover;")
+    with col2:
+        st.markdown(f"<strong style='font-size: 1.1em;'>{username}</strong>", unsafe_allow_html=True)
+        if show_follow and username != st.session_state.quantora_username:
+            is_following = is_user_following(st.session_state.quantora_username, username)
+            follow_text = "Following" if is_following else "Follow"
+            if st.button(follow_text, key=f"follow_{username}", use_container_width=True):
+                update_follow(st.session_state.quantora_username, username, not is_following)
+                st.rerun()
+
+def quantora_post_actions(row, index):
+    quantora_username = row['quantora_username']
+    quantora_timestamp = row['quantora_timestamp']
+    quantora_likes = int(row.get('quantora_likes', 0))
+    quantora_post_key = f"{quantora_username}_{quantora_timestamp}"
+    liked = quantora_post_key in st.session_state.quantora_liked_posts
+
+    col1, col2, _ = st.columns([0.15, 0.15, 0.7])
+    with col1:
+        like_button_label = f"{'❤️' if liked else '🤍'} {quantora_likes}"
+        if st.button(like_button_label, key=f"like_btn_{index}", use_container_width=True):
+            quantora_df = pd.read_csv(QUANTORA_POSTS_CSV)
+            if liked:
+                quantora_df.at[index, 'quantora_likes'] -= 1
+                st.session_state.quantora_liked_posts.discard(quantora_post_key)
+            else:
+                quantora_df.at[index, 'quantora_likes'] += 1
+                st.session_state.quantora_liked_posts.add(quantora_post_key)
+            quantora_df.to_csv(QUANTORA_POSTS_CSV, index=False)
+            st.rerun()
+    with col2:
+        with st.expander("💬 Comments", expanded=False):
+            quantora_comment_section(row, index)
+
+def quantora_comment_section(row, index):
+    quantora_username = row['quantora_username']
+    quantora_comments_raw = row.get('quantora_comments', '')
+    if pd.isna(quantora_comments_raw):
+        quantora_comments_raw = ""
+    quantora_comments = quantora_comments_raw.split("|") if quantora_comments_raw else []
+    for c in quantora_comments:
+        if c:
+            parts = c.split(": ", 1)
+            if len(parts) == 2:
+                commenter, comment_text = parts[0], parts[1]
+                st.markdown(f"<div style='padding: 8px; margin-bottom: 5px; background-color: #f0f2f5; border-radius: 5px;'><strong>{commenter}:</strong> {comment_text}</div>", unsafe_allow_html=True)
+            else:
+                st.markdown(f"- {c}")
+
+    comment_input_col, comment_button_col = st.columns([0.8, 0.2])
+    with comment_input_col:
+        quantora_new_comment = st.text_input("", placeholder="Add a comment...", key=f"comment_input_{index}")
+    with comment_button_col:
+        if st.button("Post", key=f"comment_post_btn_{index}", use_container_width=True):
+            if quantora_new_comment:
+                quantora_df = pd.read_csv(QUANTORA_POSTS_CSV)
+                quantora_updated_comment = f"{st.session_state.quantora_username}: {quantora_new_comment}"
+                quantora_combined_comments = quantora_comments_raw + f"|{quantora_updated_comment}" if quantora_comments_raw else quantora_updated_comment
+                quantora_df.at[index, 'quantora_comments'] = quantora_combined_comments
+                quantora_df.to_csv(QUANTORA_POSTS_CSV, index=False)
+                st.rerun()
+
+def is_user_following(follower, followed):
+    try:
+        follows_df = pd.read_csv(QUANTORA_FOLLOWS_CSV)
+        return ((follows_df['follower'] == follower) & (follows_df['followed'] == followed)).any()
+    except FileNotFoundError:
+        return False
+
+def update_follow(follower, followed, follow=True):
+    follows_df = pd.read_csv(QUANTORA_FOLLOWS_CSV) if os.path.exists(QUANTORA_FOLLOWS_CSV) else pd.DataFrame(columns=['follower', 'followed'])
+    if follow:
+        if not ((follows_df['follower'] == follower) & (follows_df['followed'] == followed)).any():
+            new_follow = pd.DataFrame([[follower, followed]], columns=['follower', 'followed'])
+            new_follow.to_csv(QUANTORA_FOLLOWS_CSV, mode='a', header=False, index=False)
+    else:
+        follows_df = follows_df[~((follows_df['follower'] == follower) & (follows_df['followed'] == followed))]
+        follows_df.to_csv(QUANTORA_FOLLOWS_CSV, index=False)
+
+def search_users(query):
+    users_df = pd.read_csv(QUANTORA_USERS_CSV)
+    results = users_df[users_df['quantora_username'].str.contains(query, case=False)]
+    return results
+
+def get_user_posts(username):
+    posts_df = pd.read_csv(QUANTORA_POSTS_CSV)
+    return posts_df[posts_df['quantora_username'] == username].sort_values(by='quantora_timestamp', ascending=False)
+
+def get_followers(username):
+    follows_df = pd.read_csv(QUANTORA_FOLLOWS_CSV) if os.path.exists(QUANTORA_FOLLOWS_CSV) else pd.DataFrame(columns=['follower', 'followed'])
+    return follows_df[follows_df['followed'] == username]['follower'].tolist()
+
+def get_following(username):
+    follows_df = pd.read_csv(QUANTORA_FOLLOWS_CSV) if os.path.exists(QUANTORA_FOLLOWS_CSV) else pd.DataFrame(columns=['follower', 'followed'])
+    return follows_df[follows_df['follower'] == username]['followed'].tolist()
+
+# ---------- Quantora Social User Auth (Simplified & Persistent) ----------
+def quantora_register_user():
+    st.subheader("Join the Quantora Universe!")
+    quantora_email = st.text_input("Your Email (optional)")
+    quantora_username = st.text_input("Choose a Username")
+    quantora_password = st.text_input("Create a Password", type="password")
+    quantora_bio = st.text_area("Tell us about yourself (optional)")
+    quantora_profile_pic_upload = st.file_uploader("Add a Profile Picture (optional)", type=["jpg", "jpeg", "png"])
+
+    if st.button("Embark on Your Quantora Journey"):
+        quantora_users_df = pd.read_csv(QUANTORA_USERS_CSV)
+        if quantora_username in quantora_users_df['quantora_username'].values:
+            st.error("This username is already taken. Let your uniqueness shine with another!")
+        elif not quantora_username:
+            st.error("A username is your key to the Quantora Universe!")
+        elif not quantora_password:
+            st.error("Set a password to secure your Quantora experience!")
         else:
-            new_user = pd.DataFrame([[email, username, password]], columns=['email', 'username', 'password'])
-            new_user.to_csv(USERS_CSV, mode='a', header=False, index=False)
-            st.success("Registered successfully. Please login.")
+            quantora_profile_pic_path = DEFAULT_PROFILE_PIC
+            if quantora_profile_pic_upload is not None:
+                pic_filename = f"{quantora_username}_{int(time.time())}_{quantora_profile_pic_upload.name}"
+                quantora_profile_pic_path = os.path.join(QUANTORA_PROFILE_PICS_DIR, pic_filename)
+                with open(quantora_profile_pic_path, "wb") as f:
+                    f.write(quantora_profile_pic_upload.getbuffer())
 
-def login_user():
-    st.subheader("Login")
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
-    if st.button("Login"):
-        users_df = pd.read_csv(USERS_CSV)
-        if ((users_df['username'] == username) & (users_df['password'] == password)).any():
-            st.session_state.logged_in = True
-            st.session_state.username = username
-            st.success(f"Logged in as {username}")
+            quantora_new_user = pd.DataFrame([[quantora_email, quantora_username, quantora_password, quantora_profile_pic_path, quantora_bio]],
+                                        columns=['quantora_email', 'quantora_username', 'quantora_password', 'quantora_profile_pic', 'bio'])
+            quantora_new_user.to_csv(QUANTORA_USERS_CSV, mode='a', header=False, index=False)
+            st.success("Welcome to Quantora! Log in to begin your adventure.")
+
+def quantora_login_user():
+    st.subheader("Re-enter the Quantora Universe")
+    quantora_username = st.text_input("Username")
+    quantora_password = st.text_input("Password", type="password")
+    if st.button("Unlock Quantora"):
+        quantora_users_df = pd.read_csv(QUANTORA_USERS_CSV)
+        user_match = quantora_users_df[
+            (quantora_users_df['quantora_username'] == quantora_username) &
+            (quantora_users_df['quantora_password'] == quantora_password)
+        ]
+        if not user_match.empty:
+            st.session_state.quantora_logged_in = True
+            st.session_state.quantora_username = quantora_username
+            st.success(f"Welcome back, @{quantora_username}! The Quantora Universe awaits.")
             st.rerun()
         else:
-            st.error("Invalid username or password")
+            st.error("Incorrect username or password. Double-check your credentials to rejoin Quantora.")
 
-# ---------- Post Upload ----------
-def new_post():
-    st.subheader("New Post")
-    post_text = st.text_area("What's on your mind?")
-    uploaded_file = st.file_uploader("Upload image", type=["jpg", "jpeg", "png"])
+# ---------- Quantora Social Post Creation ----------
+def quantora_new_post():
+    st.subheader("Share Your Moment on Quantora")
+    quantora_post_text = st.text_area("What's happening?", height=150)
+    quantora_uploaded_file = st.file_uploader("Add a Photo or Video (optional)", type=["jpg", "jpeg", "png"]) # Consider adding video later
 
-    if st.button("Post"):
-        image_path = ""
-        if uploaded_file is not None:
-            if not os.path.exists("images"):
-                os.makedirs("images")
-            image_path = os.path.join("images", f"{int(time.time())}_{uploaded_file.name}")
-            with open(image_path, "wb") as f:
-                f.write(uploaded_file.getbuffer())
+    if st.button("Post to Quantora"):
+        quantora_image_path = ""
+        if quantora_uploaded_file is not None:
+            image_filename = f"{st.session_state.quantora_username}_{int(time.time())}_{quantora_uploaded_file.name}"
+            quantora_image_path = os.path.join(QUANTORA_IMAGES_DIR, image_filename)
+            with open(quantora_image_path, "wb") as f:
+                f.write(quantora_uploaded_file.getbuffer())
 
-        new_data = pd.DataFrame([[st.session_state.username, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), post_text, image_path, 0, ""]],
-                                columns=['username', 'timestamp', 'text', 'image_path', 'likes', 'comments'])
-        new_data.to_csv(POSTS_CSV, mode='a', header=False, index=False)
-        st.success("Posted!")
+        quantora_new_data = pd.DataFrame([[st.session_state.quantora_username, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), quantora_post_text, quantora_image_path, 0, ""]],
+                                    columns=['quantora_username', 'quantora_timestamp', 'quantora_text', 'quantora_image_path', 'quantora_likes', 'quantora_comments'])
+        quantora_new_data.to_csv(QUANTORA_POSTS_CSV, mode='a', header=False, index=False)
+        st.success("Your post has been shared with the Quantora community!")
         st.rerun()
 
-# ---------- Social Feed ----------
-def social_feed():
-    st.subheader("🔥 Firebox Social")
-
+# ---------- Quantora Social Feed Display (News Feed Logic) ----------
+def quantora_social_feed():
+    st.subheader("Your Quantora Feed")
     try:
-        df = pd.read_csv(POSTS_CSV)
-        expected_cols = ['username', 'timestamp', 'text', 'image_path', 'likes', 'comments']
-        for col in expected_cols:
-            if col not in df.columns:
-                df[col] = "" if col in ['text', 'image_path', 'comments'] else 0
+        quantora_df = pd.read_csv(QUANTORA_POSTS_CSV)
+        follows = get_following(st.session_state.quantora_username)
+        followed_posts = quantora_df[quantora_df['quantora_username'].isin(follows + [st.session_state.quantora_username])].sort_values(by='quantora_timestamp', ascending=False)
+        for index, row in followed_posts.iterrows():
+            st.markdown("<div style='margin-bottom: 20px; padding: 15px; border: 1px solid #e1e4e8; border-radius: 10px; background-color: #fff;'>", unsafe_allow_html=True)
+            quantora_user_info_header(row['quantora_username'])
+            st.markdown(f"<div style='margin-top: 10px; font-size: 1em; line-height: 1.4;'>{handle_hashtags(row.get('quantora_text', ''))}</div>", unsafe_allow_html=True)
+            if row.get('quantora_image_path') and os.path.exists(row.get('quantora_image_path')):
+                st.image(row['quantora_image_path'], use_column_width=True, style="margin-top: 10px; border-radius: 8px;")
+            st.markdown("<hr style='margin: 15px 0; border-top: 1px solid #ddd;'>", unsafe_allow_html=True)
+            quantora_post_actions(row, index)
+            st.markdown("</div>", unsafe_allow_html=True)
     except Exception as e:
-        st.error(f"Failed to load posts: {e}")
-        return
+        st.error(f"Error loading feed: {e}")
 
-    if 'liked_posts' not in st.session_state:
-        st.session_state.liked_posts = set()
+# ---------- Quantora Social Profile Page (Enhanced) ----------
+def quantora_profile(view_username=None):
+    username_to_view = view_username if view_username else st.session_state.quantora_username
+    st.subheader(f"@{username_to_view}")
 
-    for index, row in df[::-1].iterrows():
-        try:
-            username = row['username']
-            timestamp = row['timestamp']
-            post_text = row.get('text', '')
-            image_path = row.get('image_path', '')
-            likes = int(row.get('likes', 0))
-            comments_raw = row.get('comments', '')
+    user_data = pd.read_csv(QUANTORA_USERS_CSV)
+    try:
+        user_profile = user_data[user_data['quantora_username'] == username_to_view].iloc[0]
+        bio = user_profile.get('bio', 'No bio available.')
+        profile_pic =user_profile.get('quantora_profile_pic', DEFAULT_PROFILE_PIC)
+        followers = get_followers(username_to_view)
+        following = get_following(username_to_view)
+        posts = get_user_posts(username_to_view)
 
-            st.markdown(f"**{username}** at {timestamp}")
-            st.markdown(post_text if pd.notna(post_text) else "")
-
-            if pd.notna(image_path) and os.path.exists(image_path):
-                st.image(image_path, width=400)
-
-            post_key = f"{username}_{timestamp}"
-            if post_key not in st.session_state.liked_posts:
-                if st.button("👍 Like", key=f"like_{index}"):
-                    df.at[index, 'likes'] = likes + 1
-                    st.session_state.liked_posts.add(post_key)
-                    df.to_csv(POSTS_CSV, index=False)
-                    st.rerun()
-            else:
-                st.markdown("✅ You already liked this post.")
-            st.markdown(f"Likes: {int(df.at[index, 'likes'])}")
-
-            # Comments section
-            with st.expander("💬 Comments"):
-                if pd.isna(comments_raw):
-                    comments_raw = ""
-                comments = comments_raw.split("|") if comments_raw else []
-
-                for c in comments:
-                    if c:
-                        st.markdown(f"- {c}")
-
-                new_comment = st.text_input("Add a comment", key=f"comment_{index}")
-                if st.button("Comment", key=f"comment_btn_{index}"):
-                    updated_comment = f"{st.session_state.username}: {new_comment}"
-                    combined_comments = comments_raw + f"|{updated_comment}" if comments_raw else updated_comment
-                    df.at[index, 'comments'] = combined_comments
-                    df.to_csv(POSTS_CSV, index=False)
+        col1, col2 = st.columns([0.2, 0.8])
+        with col1:
+            st.image(profile_pic, width=80, height=80, use_column_width=False, style="border-radius: 50%; object-fit: cover;")
+        with col2:
+            st.markdown(f"<strong style='font-size: 1.5em;'>{username_to_view}</strong>", unsafe_allow_html=True)
+            st.markdown(f"<span style='color: #777;'>{len(posts)} posts | {len(followers)} followers | {len(following)} following</span>", unsafe_allow_html=True)
+            st.markdown(f"<p style='margin-top: 5px;'>{bio}</p>", unsafe_allow_html=True)
+            if username_to_view != st.session_state.quantora_username:
+                is_following = is_user_following(st.session_state.quantora_username, username_to_view)
+                follow_text = "Following" if is_following else "Follow"
+                if st.button(follow_text, key=f"profile_follow_{username_to_view}", use_container_width=True):
+                    update_follow(st.session_state.quantora_username, username_to_view, not is_following)
                     st.rerun()
 
-        except Exception as e:
-            st.error(f"Post error: {e}")
+        st.subheader("Posts")
+        if not posts.empty:
+            cols = st.columns(3)
+            for i, row in posts.iterrows():
+                with cols[i % 3]:
+                    if row['quantora_image_path'] and os.path.exists(row['quantora_image_path']):
+                        st.image(row['quantora_image_path'], use_column_width=True, style="border-radius: 5px;")
+                    else:
+                        st.info("No image") # Placeholder for text posts in grid
+        else:
+            st.info(f"@{username_to_view} hasn't posted yet.")
+    except IndexError:
+        st.error("User not found.")
 
-# ---------- Firebox AI ----------
-def firebox_ai():
-    st.subheader("🤖 Ask Firebox AI")
-    prompt = st.text_input("Ask something...")
-    if st.button("Ask"):
-        st.write("Thinking...")
-
-        # LLaMA
-        try:
-            llama_resp = requests.post("https://api.llmapi.com/", json={"prompt": prompt, "temperature": 0.7})
-            llama_text = llama_resp.json().get("text", "")
-        except:
-            llama_text = "LLaMA failed."
-
-        # Gemini
-        try:
-            gemini_api_key = "AIzaSyAbXv94hwzhbrxhBYq-zS58LkhKZQ6cjMg"
-            gemini_resp = requests.post(
-                f"https://generativelanguage.googleapis.com/v1beta2/models/text-bison-001:generateText?key={gemini_api_key}",
-                json={"prompt": {"text": prompt}}
-            )
-            gemini_text = gemini_resp.json()['candidates'][0]['output']
-        except:
-            gemini_text = "Gemini failed."
-
-        # Combine responses
-        st.markdown("**Firebox Response:**")
-        st.write(f"**LLaMA:** {llama_text}")
-        st.write(f"**Gemini:** {gemini_text}")
-
-# ---------- Main ----------
-def main():
-    st.set_page_config(page_title="Firebox Social", layout="centered")
-    st.sidebar.title("🔥 Firebox")
-
-    if 'logged_in' not in st.session_state:
-        st.session_state.logged_in = False
-
-    if st.session_state.logged_in:
-        st.sidebar.success(f"Logged in as {st.session_state.username}")
-        menu = st.sidebar.radio("Menu", ["Home", "New Post", "Ask Firebox AI", "Logout"])
-
-        if menu == "Home":
-            social_feed()
-        elif menu == "New Post":
-            new_post()
-        elif menu == "Ask Firebox AI":
-            firebox_ai()
-        elif menu == "Logout":
-            st.session_state.logged_in = False
-            st.session_state.username = ""
+# ---------- Quantora Social Search ----------
+def quantora_search():
+    st.subheader("Search Users")
+    query = st.text_input("Search for usernames:")
+    if query:
+        results = search_users(query)
+        if not results.empty:
+            for index, user in results.iterrows():
+                if st.button(f"@{user['quantora_username']}", key=f"search_result_{index}"):
+                    st.session_state.view_profile = user['quantora_username']
+                    st.rerun()
+        else:
+            st.info("No users found matching your search.")
+    if 'view_profile' in st.session_state:
+        quantora_profile(st.session_state.view_profile)
+        if st.button("Back to Search"):
+            del st.session_state.view_profile
             st.rerun()
 
+# ---------- Quantora Social Navigation ----------
+def quantora_sidebar():
+    st.sidebar.title("✨ The Quantora Universe")
+    if st.session_state.quantora_logged_in:
+        st.sidebar.success(f"Navigating as @{st.session_state.quantora_username}")
+        menu = st.sidebar.radio("Explore the Universe", ["Your Feed", "Create Post", "Your Profile", "Search", "Logout"]) # Simplified menu
+        return menu
     else:
-        auth_action = st.sidebar.radio("Account", ["Login", "Register"])
-        if auth_action == "Login":
-            login_user()
-        else:
-            register_user()
+        st.sidebar.info("Embark on a new social journey with Quantora!")
+        auth_action = st.sidebar.radio("Your Gateway", ["Log In", "Join Quantora"])
+        return auth_action
+
+# ---------- Main Quantora Social App ----------
+def quantora_main():
+    st.set_page_config(page_title="Quantora Social", layout="wide")
+
+    if 'quantora_logged_in' not in st.session_state:
+        st.session_state.quantora_logged_in = False
+    if 'quantora_liked_posts' not in st.session_state:
+        st.session_state.quantora_liked_posts = set()
+    if 'view_profile' not in st.session_state:
+        st.session_state.view_profile = None
+
+    navigation = quantora_sidebar()
+
+    if st.session_state.quantora_logged_in:
+        if navigation == "Your Feed":
+            quantora_social_feed()
+        elif navigation == "Create Post":
+            quantora_new_post()
+        elif navigation == "Your Profile":
+            quantora_profile()
+        elif navigation == "Search":
+            quantora_search()
+        elif navigation == "Logout":
+            st.session_state.quantora_logged_in = False
+            st.session_state.quantora_username = ""
+            st.session_state.view_profile = None
+            st.rerun()
+    else:
+        if navigation == "Log In":
+            quantora_login_user()
+        elif navigation == "Join Quantora":
+            quantora_register_user()
+
+    # Persistent Login Check on App Start
+    if 'quantora_logged_in' in st.session_state and st.session_state.quantora_logged_in:
+        pass # User is already logged in
 
 if __name__ == "__main__":
-    main()
+    quantora_main()
