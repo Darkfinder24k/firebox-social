@@ -92,9 +92,12 @@ def quantora_comment_section(row, index):
             parts = c.split(": ", 1)
             if len(parts) == 2:
                 commenter, comment_text = parts[0], parts[1]
-                st.markdown(f"<div style='padding: 8px; margin-bottom: 5px; background-color: #f0f2f5; border-radius: 5px;'><strong>{commenter}:</strong> {comment_text}</div>", unsafe_allow_html=True)
+                colored_commenter = f'<span style="color: black;">{commenter}:</span>' # Commenter name in black
+                colored_comment_text = f'<span style="color: black;">{comment_text}</span>' # Comment text in black
+                st.markdown(f"<div style='padding: 8px; margin-bottom: 5px; background-color: #f0f2f5; border-radius: 5px;'><strong>{colored_commenter}</strong> {colored_comment_text}</div>", unsafe_allow_html=True)
             else:
-                st.markdown(f"- {c}")
+                colored_c = f'<span style="color: black;">{c}</span>' # Single-part comments in black
+                st.markdown(f"- {colored_c}", unsafe_allow_html=True)
 
     comment_input_col, comment_button_col = st.columns([0.8, 0.2])
     with comment_input_col:
@@ -103,7 +106,9 @@ def quantora_comment_section(row, index):
         if st.button("Post", key=f"comment_post_btn_{index}", use_container_width=True):
             if quantora_new_comment:
                 quantora_df = pd.read_csv(QUANTORA_POSTS_CSV)
-                quantora_updated_comment = f"{st.session_state.quantora_username}: {quantora_new_comment}"
+                colored_username = f'<span style="color: black;">{st.session_state.quantora_username}:</span>' # Your username in black
+                colored_new_comment = f'<span style="color: black;">{quantora_new_comment}</span>' # New comment in black
+                quantora_updated_comment = f"{st.session_state.quantora_username}: {quantora_new_comment}" # Saving plain text
                 quantora_combined_comments = quantora_comments_raw + f"|{quantora_updated_comment}" if quantora_comments_raw else quantora_updated_comment
                 quantora_df.at[index, 'quantora_comments'] = quantora_combined_comments
                 quantora_df.to_csv(QUANTORA_POSTS_CSV, index=False)
