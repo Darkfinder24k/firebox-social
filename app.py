@@ -87,35 +87,51 @@ def quantora_comment_section(row, index):
     if pd.isna(quantora_comments_raw):
         quantora_comments_raw = ""
     quantora_comments = quantora_comments_raw.split("|") if quantora_comments_raw else []
+
+    # Wrap in a wide container
+    st.markdown("<div style='max-width: 850px; width: 100%;'>", unsafe_allow_html=True)
+
+    st.markdown("### 💬 Comments")
+
     for c in quantora_comments:
         if c:
             parts = c.split(": ", 1)
             if len(parts) == 2:
                 commenter, comment_text = parts[0], parts[1]
-                colored_commenter = f'<span style="color: black;">{commenter}:</span>'
-                colored_comment_text = f'<span style="color: black;">{comment_text}</span>'
-                # Removed explicit width style - let it expand naturally
-                st.markdown(f"<div style='padding: 8px; margin-bottom: 5px; background-color: #f0f2f5; border-radius: 5px; width: 100%; max-width: 1000px;'><strong>{colored_commenter}</strong> {colored_comment_text}</div>", unsafe_allow_html=True)
-
+                st.markdown(f"""
+                    <div style='
+                        width: 100%;
+                        max-width: 100%;
+                        padding: 10px;
+                        margin-bottom: 8px;
+                        background-color: #f0f2f5;
+                        border-radius: 8px;
+                        overflow-wrap: break-word;
+                        word-wrap: break-word;
+                        white-space: normal;
+                    '>
+                        <strong style='color: black;'>{commenter}:</strong>
+                        <span style='color: black;'>{comment_text}</span>
+                    </div>
+                """, unsafe_allow_html=True)
             else:
-                colored_c = f'<span style="color: black;">{c}</span>'
-                # Removed explicit width style for single-part comments
-                st.markdown(f"<div style='margin-bottom: 5px;'>- {colored_c}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div style='margin-bottom: 5px; color: black;'>- {c}</div>", unsafe_allow_html=True)
 
-    comment_input_col, comment_button_col = st.columns([0.9, 0.1]) # Wider input field
+    # Wider columns for input and post button
+    comment_input_col, comment_button_col = st.columns([0.85, 0.15])
     with comment_input_col:
         quantora_new_comment = st.text_input("", placeholder="Add a comment...", key=f"comment_input_{index}")
     with comment_button_col:
         if st.button("Post", key=f"comment_post_btn_{index}", use_container_width=True):
             if quantora_new_comment:
                 quantora_df = pd.read_csv(QUANTORA_POSTS_CSV)
-                colored_username = f'<span style="color: black;">{st.session_state.quantora_username}:</span>'
-                colored_new_comment = f'<span style="color: black;">{quantora_new_comment}</span>'
                 quantora_updated_comment = f"{st.session_state.quantora_username}: {quantora_new_comment}"
                 quantora_combined_comments = quantora_comments_raw + f"|{quantora_updated_comment}" if quantora_comments_raw else quantora_updated_comment
                 quantora_df.at[index, 'quantora_comments'] = quantora_combined_comments
                 quantora_df.to_csv(QUANTORA_POSTS_CSV, index=False)
                 st.rerun()
+
+    st.markdown("</div>", unsafe_allow_html=True)  # Close the wide container
 
 def is_user_following(follower, followed):
     try:
